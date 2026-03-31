@@ -4419,6 +4419,7 @@ async fn unified_exec_begin_restores_working_status_snapshot() {
 async fn sidebar_renders_context_lsp_and_modified_files_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
+    chat.thread_name = Some("README project summary".to_string());
     chat.set_sidebar_enabled(/*enabled*/ true);
     chat.token_info = Some(TokenUsageInfo {
         total_token_usage: TokenUsage {

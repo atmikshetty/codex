@@ -12,7 +12,6 @@ use tokio::time::timeout;
 
 use super::*;
 
-const SIDEBAR_SESSION_TITLE: &str = "Session Title (mock)";
 const SIDEBAR_WIDTH: u16 = 38;
 const SIDEBAR_GAP: u16 = 1;
 const SIDEBAR_MIN_MAIN_WIDTH: u16 = 90;
@@ -204,9 +203,15 @@ impl ChatWidget {
     fn sidebar_lines(&self, width: usize, max_height: usize) -> Vec<Line<'static>> {
         let usage = self.status_line_total_usage();
         let context_tokens = usage.tokens_in_context_window().max(0);
-        let used_percent = self.status_line_context_used_percent().unwrap_or(0);
+        let remaining_percent = self.status_line_context_remaining_percent().unwrap_or(0);
         let spent = estimated_sidebar_cost_usd(&usage);
-        let session_title = truncate_text(SIDEBAR_SESSION_TITLE, width);
+        let session_title = truncate_text(
+            self.thread_name
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .unwrap_or("Untitled session"),
+            width,
+        );
 
         let mut lines = vec![
             Line::from(vec![Span::from(session_title).bold()]),
@@ -215,7 +220,7 @@ impl ChatWidget {
             Line::from(vec![
                 Span::from(format!("{} tokens", format_tokens_compact(context_tokens))).dim(),
             ]),
-            Line::from(vec![Span::from(format!("{used_percent}% used")).dim()]),
+            Line::from(vec![Span::from(format!("{remaining_percent}% left")).dim()]),
             Line::from(vec![Span::from(format!("${spent:.2} spent")).dim()]),
             Line::from(""),
             Line::from(vec!["LSP".bold()]),

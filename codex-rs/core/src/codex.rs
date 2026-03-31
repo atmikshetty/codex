@@ -1322,6 +1322,19 @@ impl Session {
         state.session_configuration.codex_home().clone()
     }
 
+    pub(crate) async fn thread_title_state(&self) -> (Option<String>, SessionSource) {
+        let state = self.state.lock().await;
+        (
+            state.session_configuration.thread_name.clone(),
+            state.session_configuration.session_source.clone(),
+        )
+    }
+
+    pub(crate) async fn set_session_thread_name(&self, thread_name: Option<String>) {
+        let mut state = self.state.lock().await;
+        state.session_configuration.thread_name = thread_name;
+    }
+
     pub(crate) fn subscribe_out_of_band_elicitation_pause_state(&self) -> watch::Receiver<bool> {
         self.out_of_band_elicitation_paused.subscribe()
     }
@@ -4548,7 +4561,6 @@ mod handlers {
     use crate::mcp::collect_mcp_snapshot_from_manager;
     use crate::review_prompts::resolve_review_request;
     use crate::rollout::RolloutRecorder;
-    use crate::rollout::session_index;
     use crate::tasks::CompactTask;
     use crate::tasks::UndoTask;
     use crate::tasks::UserShellCommandMode;
@@ -4566,7 +4578,6 @@ mod handlers {
     use codex_protocol::protocol::ReviewRequest;
     use codex_protocol::protocol::RolloutItem;
     use codex_protocol::protocol::SkillsListEntry;
-    use codex_protocol::protocol::ThreadNameUpdatedEvent;
     use codex_protocol::protocol::ThreadRolledBackEvent;
     use codex_protocol::protocol::TurnAbortReason;
     use codex_protocol::protocol::WarningEvent;
@@ -5247,10 +5258,7 @@ mod handlers {
             return;
         };
 
-        let codex_home = sess.codex_home().await;
-        if let Err(e) =
-            session_index::append_thread_name(&codex_home, sess.conversation_id, &name).await
-        {
+        if let Err(e) = crate::thread_title::persist_thread_name(sess, sub_id.clone(), name).await {
             let event = Event {
                 id: sub_id,
                 msg: EventMsg::Error(ErrorEvent {
@@ -5259,22 +5267,7 @@ mod handlers {
                 }),
             };
             sess.send_event_raw(event).await;
-            return;
         }
-
-        {
-            let mut state = sess.state.lock().await;
-            state.session_configuration.thread_name = Some(name.clone());
-        }
-
-        sess.send_event_raw(Event {
-            id: sub_id,
-            msg: EventMsg::ThreadNameUpdated(ThreadNameUpdatedEvent {
-                thread_id: sess.conversation_id,
-                thread_name: Some(name),
-            }),
-        })
-        .await;
     }
 
     pub async fn shutdown(sess: &Arc<Session>, sub_id: String) -> bool {
@@ -5736,14 +5729,12 @@ pub(crate) async fn run_turn(
     let additional_contexts = if input.is_empty() {
         Vec::new()
     } else {
+        let user_message = UserMessageItem::new(&input);
+        let user_message_text = user_message.message();
         let initial_input_for_turn: ResponseInputItem = ResponseInputItem::from(input.clone());
         let response_item: ResponseItem = initial_input_for_turn.clone().into();
-        let user_prompt_submit_outcome = run_user_prompt_submit_hooks(
-            &sess,
-            &turn_context,
-            UserMessageItem::new(&input).message(),
-        )
-        .await;
+        let user_prompt_submit_outcome =
+            run_user_prompt_submit_hooks(&sess, &turn_context, user_message_text.clone()).await;
         if user_prompt_submit_outcome.should_stop {
             record_additional_contexts(
                 &sess,
@@ -5755,6 +5746,11 @@ pub(crate) async fn run_turn(
         }
         sess.record_user_prompt_and_emit_turn_item(turn_context.as_ref(), &input, response_item)
             .await;
+        tokio::spawn(crate::thread_title::maybe_generate_thread_title(
+            Arc::clone(&sess),
+            Arc::clone(&turn_context),
+            user_message_text,
+        ));
         user_prompt_submit_outcome.additional_contexts
     };
     sess.services
