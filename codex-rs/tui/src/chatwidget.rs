@@ -360,6 +360,7 @@ mod realtime;
 use self::realtime::RealtimeConversationUiState;
 use self::realtime::RenderedUserMessageEvent;
 mod sidebar;
+mod sidebar_mode;
 mod status_surfaces;
 use self::status_surfaces::CachedProjectRootName;
 use self::status_surfaces::TerminalTitleStatusKind;
@@ -950,6 +951,7 @@ pub(crate) struct ChatWidget {
     status_line_branch_pending: bool,
     // True once we've attempted a branch lookup for the current CWD.
     status_line_branch_lookup_complete: bool,
+    sidebar_enabled: bool,
     // Cached modified file stats shown in the right sidebar.
     sidebar_modified_files: Vec<SidebarModifiedFile>,
     // CWD associated with `sidebar_modified_files`.
@@ -4815,6 +4817,7 @@ impl ChatWidget {
             status_line_branch_cwd: None,
             status_line_branch_pending: false,
             status_line_branch_lookup_complete: false,
+            sidebar_enabled: false,
             sidebar_modified_files: Vec::new(),
             sidebar_modified_files_cwd: None,
             sidebar_modified_files_pending: false,
@@ -5371,6 +5374,12 @@ impl ChatWidget {
             SlashCommand::Statusline => {
                 self.open_status_line_setup();
             }
+            SlashCommand::Sidebar => {
+                let enabled = !self.sidebar_enabled();
+                self.set_sidebar_enabled(enabled);
+                let (message, hint) = self.sidebar_toggle_message(enabled);
+                self.add_info_message(message, hint);
+            }
             SlashCommand::Theme => {
                 self.open_theme_picker();
             }
@@ -5486,6 +5495,30 @@ impl ChatWidget {
                     }
                     _ => {
                         self.add_error_message("Usage: /fast [on|off|status]".to_string());
+                    }
+                }
+            }
+            SlashCommand::Sidebar => {
+                if trimmed.is_empty() {
+                    self.dispatch_command(cmd);
+                    return;
+                }
+                match trimmed.to_ascii_lowercase().as_str() {
+                    "on" => {
+                        self.set_sidebar_enabled(/*enabled*/ true);
+                        let (message, hint) = self.sidebar_toggle_message(/*enabled*/ true);
+                        self.add_info_message(message, hint);
+                    }
+                    "off" => {
+                        self.set_sidebar_enabled(/*enabled*/ false);
+                        self.add_info_message("Sidebar hidden.".to_string(), /*hint*/ None);
+                    }
+                    "status" => {
+                        let (message, hint) = self.sidebar_status_message();
+                        self.add_info_message(message, hint);
+                    }
+                    _ => {
+                        self.add_error_message("Usage: /sidebar [on|off|status]".to_string());
                     }
                 }
             }
@@ -10894,11 +10927,7 @@ impl Drop for ChatWidget {
 
 impl Renderable for ChatWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let (main_area, sidebar_area) = self.split_main_and_sidebar(area);
-        self.as_renderable().render(main_area, buf);
-        if let Some(sidebar_area) = sidebar_area {
-            self.render_sidebar(sidebar_area, buf);
-        }
+        self.as_renderable().render(area, buf);
         self.last_rendered_width.set(Some(area.width as usize));
     }
 
@@ -10908,8 +10937,7 @@ impl Renderable for ChatWidget {
     }
 
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
-        let (main_area, _sidebar_area) = self.split_main_and_sidebar(area);
-        self.as_renderable().cursor_pos(main_area)
+        self.as_renderable().cursor_pos(area)
     }
 }
 

@@ -148,6 +148,7 @@ mod app_server_adapter;
 mod app_server_requests;
 mod loaded_threads;
 mod pending_interactive_replay;
+mod sidebar_mode;
 
 use self::agent_navigation::AgentNavigationDirection;
 use self::agent_navigation::AgentNavigationState;
@@ -944,6 +945,7 @@ pub(crate) struct App {
 
     // Pager overlay state (Transcript or Static like Diff)
     pub(crate) overlay: Option<Overlay>,
+    pub(crate) sidebar_mode_active: bool,
     pub(crate) deferred_history_lines: Vec<Line<'static>>,
     has_emitted_history_lines: bool,
 
@@ -3571,6 +3573,7 @@ impl App {
             enhanced_keys_supported,
             transcript_cells: Vec::new(),
             overlay: None,
+            sidebar_mode_active: false,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
             commit_anim_running: Arc::new(AtomicBool::new(false)),
@@ -3757,6 +3760,7 @@ impl App {
             if size != tui.terminal.last_known_screen_size {
                 self.refresh_status_line();
             }
+            self.sync_sidebar_mode(tui)?;
         }
 
         if self.overlay.is_some() {
@@ -3777,7 +3781,9 @@ impl App {
                 TuiEvent::Draw => {
                     if self.backtrack_render_pending {
                         self.backtrack_render_pending = false;
-                        self.render_transcript_once(tui);
+                        if !self.sidebar_mode_active {
+                            self.render_transcript_once(tui);
+                        }
                     }
                     self.chat_widget.maybe_post_pending_notification(tui);
                     if self
@@ -3788,15 +3794,30 @@ impl App {
                     }
                     // Allow widgets to process any pending timers before rendering.
                     self.chat_widget.pre_draw_tick();
-                    tui.draw(
-                        self.chat_widget.desired_height(tui.terminal.size()?.width),
-                        |frame| {
+                    let draw_height = if self.sidebar_mode_active {
+                        u16::MAX
+                    } else {
+                        self.chat_widget.desired_height(tui.terminal.size()?.width)
+                    };
+                    tui.draw(draw_height, |frame| {
+                        if self.sidebar_mode_active {
+                            self.chat_widget.render_sidebar_mode(
+                                frame.area(),
+                                frame.buffer,
+                                &self.transcript_cells,
+                            );
+                            if let Some((x, y)) =
+                                self.chat_widget.sidebar_mode_cursor_pos(frame.area())
+                            {
+                                frame.set_cursor_position((x, y));
+                            }
+                        } else {
                             self.chat_widget.render(frame.area(), frame.buffer);
                             if let Some((x, y)) = self.chat_widget.cursor_pos(frame.area()) {
                                 frame.set_cursor_position((x, y));
                             }
-                        },
-                    )?;
+                        }
+                    })?;
                     if self.chat_widget.external_editor_state() == ExternalEditorState::Requested {
                         self.chat_widget
                             .set_external_editor_state(ExternalEditorState::Active);
@@ -4030,6 +4051,8 @@ impl App {
                     }
                     if self.overlay.is_some() {
                         self.deferred_history_lines.extend(display);
+                    } else if self.sidebar_mode_active {
+                        tui.frame_requester().schedule_frame();
                     } else {
                         tui.insert_history_lines(display);
                     }
@@ -8736,6 +8759,7 @@ guardian_approval = true
             file_search,
             transcript_cells: Vec::new(),
             overlay: None,
+            sidebar_mode_active: false,
             deferred_history_lines: Vec::new(),
             has_emitted_history_lines: false,
             enhanced_keys_supported: false,
@@ -8790,6 +8814,7 @@ guardian_approval = true
                 file_search,
                 transcript_cells: Vec::new(),
                 overlay: None,
+                sidebar_mode_active: false,
                 deferred_history_lines: Vec::new(),
                 has_emitted_history_lines: false,
                 enhanced_keys_supported: false,

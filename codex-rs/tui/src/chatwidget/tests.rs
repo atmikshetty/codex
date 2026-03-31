@@ -2198,6 +2198,7 @@ async fn make_chatwidget_manual(
         status_line_branch_cwd: None,
         status_line_branch_pending: false,
         status_line_branch_lookup_complete: false,
+        sidebar_enabled: false,
         sidebar_modified_files: Vec::new(),
         sidebar_modified_files_cwd: None,
         sidebar_modified_files_pending: false,
@@ -4418,6 +4419,7 @@ async fn unified_exec_begin_restores_working_status_snapshot() {
 async fn sidebar_renders_context_lsp_and_modified_files_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
+    chat.set_sidebar_enabled(/*enabled*/ true);
     chat.token_info = Some(TokenUsageInfo {
         total_token_usage: TokenUsage {
             input_tokens: 52_000,
@@ -4441,13 +4443,33 @@ async fn sidebar_renders_context_lsp_and_modified_files_snapshot() {
             deletions: 0,
         },
     ];
+    chat.bottom_pane.set_composer_text(
+        "Summarize recent commits".to_string(),
+        Vec::new(),
+        Vec::new(),
+    );
 
-    let width = 130;
-    let height = 20;
+    let transcript_cells: Vec<Arc<dyn HistoryCell>> = vec![
+        Arc::new(history_cell::new_user_prompt(
+            "Summarize the project please from the README.md".to_string(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )),
+        Arc::new(PlainHistoryCell::new(vec![
+            "I found the top-level README and pulled the nearby crate docs.".into(),
+            "".into(),
+            "The repo is the Rust implementation of Codex CLI, with `core`, `cli`, `exec`, and `tui` as the main crates."
+                .into(),
+        ])),
+    ];
+
+    let width = 160;
+    let height = 28;
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
         .expect("create terminal");
     terminal
-        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .draw(|f| chat.render_sidebar_mode(f.area(), f.buffer_mut(), &transcript_cells))
         .expect("render sidebar snapshot");
     assert_snapshot!(
         "sidebar_renders_context_lsp_and_modified_files",
@@ -7469,6 +7491,38 @@ async fn slash_clear_is_disabled_while_task_running() {
         other => panic!("expected InsertHistoryCell error, got {other:?}"),
     }
     assert!(rx.try_recv().is_err(), "expected no follow-up events");
+}
+
+#[tokio::test]
+async fn slash_sidebar_toggles_sidebar_state() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.last_rendered_width.set(Some(160));
+
+    chat.dispatch_command(SlashCommand::Sidebar);
+
+    assert!(chat.sidebar_enabled());
+    let cells = drain_insert_history(&mut rx);
+    let rendered = lines_to_single_string(cells.last().expect("sidebar info message"));
+    assert!(rendered.contains("Sidebar shown."));
+
+    chat.dispatch_command_with_args(SlashCommand::Sidebar, "off".to_string(), Vec::new());
+
+    assert!(!chat.sidebar_enabled());
+    let cells = drain_insert_history(&mut rx);
+    let rendered = lines_to_single_string(cells.last().expect("sidebar hidden message"));
+    assert!(rendered.contains("Sidebar hidden."));
+}
+
+#[tokio::test]
+async fn slash_sidebar_status_reports_current_state() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command_with_args(SlashCommand::Sidebar, "status".to_string(), Vec::new());
+
+    let cells = drain_insert_history(&mut rx);
+    let rendered = lines_to_single_string(cells.last().expect("sidebar status message"));
+    assert!(rendered.contains("Sidebar is off."));
 }
 
 #[tokio::test]

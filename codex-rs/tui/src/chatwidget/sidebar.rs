@@ -25,15 +25,79 @@ const CACHED_INPUT_USD_PER_MILLION: f64 = 0.125;
 const OUTPUT_USD_PER_MILLION: f64 = 10.0;
 
 impl ChatWidget {
-    pub(super) fn split_main_and_sidebar(&self, area: Rect) -> (Rect, Option<Rect>) {
+    pub(crate) fn sidebar_enabled(&self) -> bool {
+        self.sidebar_enabled
+    }
+
+    pub(crate) fn set_sidebar_enabled(&mut self, enabled: bool) {
+        if self.sidebar_enabled == enabled {
+            return;
+        }
+
+        self.sidebar_enabled = enabled;
+        if enabled {
+            self.request_sidebar_modified_files_refresh();
+        }
+        self.request_redraw();
+    }
+
+    pub(crate) fn sidebar_status_message(&self) -> (String, Option<String>) {
+        if !self.sidebar_enabled {
+            return ("Sidebar is off.".to_string(), None);
+        }
+
+        let hint = self.sidebar_unavailable_hint();
+        ("Sidebar is on.".to_string(), hint)
+    }
+
+    pub(crate) fn sidebar_toggle_message(&self, enabled: bool) -> (String, Option<String>) {
+        if !enabled {
+            return ("Sidebar hidden.".to_string(), None);
+        }
+
+        (
+            "Sidebar shown.".to_string(),
+            self.sidebar_unavailable_hint(),
+        )
+    }
+
+    pub(crate) fn sidebar_mode_active_for_terminal(&self, terminal_width: u16) -> bool {
+        self.sidebar_enabled
+            && self.thread_id.is_some()
+            && Self::sidebar_width_for_terminal(terminal_width).is_some()
+    }
+
+    pub(super) fn sidebar_min_terminal_width() -> u16 {
+        SIDEBAR_MIN_MAIN_WIDTH
+            .saturating_add(SIDEBAR_GAP)
+            .saturating_add(SIDEBAR_WIDTH)
+    }
+
+    fn sidebar_unavailable_hint(&self) -> Option<String> {
         if self.thread_id.is_none() {
+            return Some("Start a session to populate the sidebar.".to_string());
+        }
+
+        let terminal_width = self
+            .last_rendered_width
+            .get()
+            .and_then(|width| u16::try_from(width).ok())?;
+        if self.sidebar_mode_active_for_terminal(terminal_width) {
+            return None;
+        }
+
+        Some(format!(
+            "Expand the terminal to at least {} columns to pin the sidebar.",
+            Self::sidebar_min_terminal_width()
+        ))
+    }
+
+    pub(super) fn split_main_and_sidebar(&self, area: Rect) -> (Rect, Option<Rect>) {
+        if !self.sidebar_mode_active_for_terminal(area.width) {
             return (area, None);
         }
 
-        let Some(sidebar_width) = Self::sidebar_width_for_terminal(area.width) else {
-            return (area, None);
-        };
-
+        let sidebar_width = SIDEBAR_WIDTH;
         let reserved = sidebar_width.saturating_add(SIDEBAR_GAP);
         let main_width = area.width.saturating_sub(reserved);
         let main_area = Rect::new(area.x, area.y, main_width, area.height);
@@ -64,9 +128,6 @@ impl ChatWidget {
         if cfg!(test) {
             return;
         }
-        if self.thread_id.is_none() {
-            return;
-        }
 
         let Some(terminal_width) = self
             .last_rendered_width
@@ -75,7 +136,7 @@ impl ChatWidget {
         else {
             return;
         };
-        if !Self::sidebar_enabled_for_width(terminal_width) {
+        if !self.sidebar_mode_active_for_terminal(terminal_width) {
             return;
         }
 
@@ -255,16 +316,8 @@ impl ChatWidget {
             .unwrap_or(self.config.cwd.as_path())
     }
 
-    fn sidebar_enabled_for_width(terminal_width: u16) -> bool {
-        Self::sidebar_width_for_terminal(terminal_width).is_some()
-    }
-
     fn sidebar_width_for_terminal(terminal_width: u16) -> Option<u16> {
-        (terminal_width
-            >= SIDEBAR_MIN_MAIN_WIDTH
-                .saturating_add(SIDEBAR_GAP)
-                .saturating_add(SIDEBAR_WIDTH))
-        .then_some(SIDEBAR_WIDTH)
+        (terminal_width >= Self::sidebar_min_terminal_width()).then_some(SIDEBAR_WIDTH)
     }
 }
 

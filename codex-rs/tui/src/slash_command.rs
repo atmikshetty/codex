@@ -40,6 +40,7 @@ pub enum SlashCommand {
     DebugConfig,
     Title,
     Statusline,
+    Sidebar,
     Theme,
     Mcp,
     Apps,
@@ -89,6 +90,7 @@ impl SlashCommand {
             SlashCommand::DebugConfig => "show config layers and requirement sources for debugging",
             SlashCommand::Title => "configure which items appear in the terminal title",
             SlashCommand::Statusline => "configure which items appear in the status line",
+            SlashCommand::Sidebar => "toggle the right sidebar",
             SlashCommand::Theme => "choose a syntax highlighting theme",
             SlashCommand::Ps => "list background terminals",
             SlashCommand::Stop => "stop all background terminals",
@@ -132,6 +134,7 @@ impl SlashCommand {
                 | SlashCommand::Rename
                 | SlashCommand::Plan
                 | SlashCommand::Fast
+                | SlashCommand::Sidebar
                 | SlashCommand::SandboxReadRoot
         )
     }
@@ -166,6 +169,7 @@ impl SlashCommand {
             | SlashCommand::Skills
             | SlashCommand::Status
             | SlashCommand::DebugConfig
+            | SlashCommand::Sidebar
             | SlashCommand::Ps
             | SlashCommand::Stop
             | SlashCommand::Mcp
