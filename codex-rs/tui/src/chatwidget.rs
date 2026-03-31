@@ -43,6 +43,7 @@ use url::Url;
 use self::realtime::PendingSteerCompareKey;
 use crate::app_command::AppCommand;
 use crate::app_event::RealtimeAudioDeviceKind;
+use crate::app_event::SidebarModifiedFile;
 use crate::app_server_session::ThreadSessionState;
 #[cfg(not(target_os = "linux"))]
 use crate::audio_device::list_realtime_audio_device_names;
@@ -358,6 +359,7 @@ use self::plugins::PluginsCacheState;
 mod realtime;
 use self::realtime::RealtimeConversationUiState;
 use self::realtime::RenderedUserMessageEvent;
+mod sidebar;
 mod status_surfaces;
 use self::status_surfaces::CachedProjectRootName;
 use self::status_surfaces::TerminalTitleStatusKind;
@@ -948,6 +950,14 @@ pub(crate) struct ChatWidget {
     status_line_branch_pending: bool,
     // True once we've attempted a branch lookup for the current CWD.
     status_line_branch_lookup_complete: bool,
+    // Cached modified file stats shown in the right sidebar.
+    sidebar_modified_files: Vec<SidebarModifiedFile>,
+    // CWD associated with `sidebar_modified_files`.
+    sidebar_modified_files_cwd: Option<PathBuf>,
+    // True while an async modified-file refresh is running.
+    sidebar_modified_files_pending: bool,
+    // Last completed refresh timestamp for throttling background git polling.
+    sidebar_modified_files_last_refresh: Option<Instant>,
     external_editor_state: ExternalEditorState,
     realtime_conversation: RealtimeConversationUiState,
     last_rendered_user_message_event: Option<RenderedUserMessageEvent>,
@@ -2197,7 +2207,8 @@ impl ChatWidget {
 
         if self.plan_stream_controller.is_none() {
             self.plan_stream_controller = Some(PlanStreamController::new(
-                self.last_rendered_width.get().map(|w| w.saturating_sub(4)),
+                self.last_rendered_content_width()
+                    .map(|width| width.saturating_sub(4)),
                 &self.config.cwd,
             ));
         }
@@ -4113,6 +4124,7 @@ impl ChatWidget {
         if self.should_animate_terminal_title_spinner() {
             self.refresh_terminal_title();
         }
+        self.request_sidebar_modified_files_refresh();
     }
 
     /// Handle completion of an `AgentMessage` turn item.
@@ -4247,7 +4259,8 @@ impl ChatWidget {
                 self.needs_final_message_separator = false;
             }
             self.stream_controller = Some(StreamController::new(
-                self.last_rendered_width.get().map(|w| w.saturating_sub(2)),
+                self.last_rendered_content_width()
+                    .map(|width| width.saturating_sub(2)),
                 &self.config.cwd,
             ));
         }
@@ -4802,6 +4815,10 @@ impl ChatWidget {
             status_line_branch_cwd: None,
             status_line_branch_pending: false,
             status_line_branch_lookup_complete: false,
+            sidebar_modified_files: Vec::new(),
+            sidebar_modified_files_cwd: None,
+            sidebar_modified_files_pending: false,
+            sidebar_modified_files_last_refresh: None,
             external_editor_state: ExternalEditorState::Closed,
             realtime_conversation: RealtimeConversationUiState::default(),
             last_rendered_user_message_event: None,
@@ -10877,16 +10894,22 @@ impl Drop for ChatWidget {
 
 impl Renderable for ChatWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        self.as_renderable().render(area, buf);
+        let (main_area, sidebar_area) = self.split_main_and_sidebar(area);
+        self.as_renderable().render(main_area, buf);
+        if let Some(sidebar_area) = sidebar_area {
+            self.render_sidebar(sidebar_area, buf);
+        }
         self.last_rendered_width.set(Some(area.width as usize));
     }
 
     fn desired_height(&self, width: u16) -> u16 {
-        self.as_renderable().desired_height(width)
+        self.as_renderable()
+            .desired_height(self.main_content_width_for_terminal(width))
     }
 
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
-        self.as_renderable().cursor_pos(area)
+        let (main_area, _sidebar_area) = self.split_main_and_sidebar(area);
+        self.as_renderable().cursor_pos(main_area)
     }
 }
 

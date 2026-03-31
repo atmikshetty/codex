@@ -5237,6 +5237,9 @@ impl App {
                 self.chat_widget.set_status_line_branch(cwd, branch);
                 self.refresh_status_line();
             }
+            AppEvent::SidebarModifiedFilesUpdated { cwd, files } => {
+                self.chat_widget.set_sidebar_modified_files(cwd, files);
+            }
             AppEvent::StatusLineSetupCancelled => {
                 self.chat_widget.cancel_status_line_setup();
             }

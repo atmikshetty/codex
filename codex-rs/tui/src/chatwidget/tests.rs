@@ -9,6 +9,7 @@ use crate::app_event::AppEvent;
 use crate::app_event::ExitMode;
 #[cfg(not(target_os = "linux"))]
 use crate::app_event::RealtimeAudioDeviceKind;
+use crate::app_event::SidebarModifiedFile;
 use crate::app_event_sender::AppEventSender;
 use crate::bottom_pane::FeedbackAudience;
 use crate::bottom_pane::LocalImageAttachment;
@@ -2197,6 +2198,10 @@ async fn make_chatwidget_manual(
         status_line_branch_cwd: None,
         status_line_branch_pending: false,
         status_line_branch_lookup_complete: false,
+        sidebar_modified_files: Vec::new(),
+        sidebar_modified_files_cwd: None,
+        sidebar_modified_files_pending: false,
+        sidebar_modified_files_last_refresh: None,
         external_editor_state: ExternalEditorState::Closed,
         realtime_conversation: RealtimeConversationUiState::default(),
         last_rendered_user_message_event: None,
@@ -4405,6 +4410,47 @@ async fn unified_exec_begin_restores_working_status_snapshot() {
         .expect("draw chatwidget");
     assert_snapshot!(
         "unified_exec_begin_restores_working_status",
+        normalized_backend_snapshot(terminal.backend())
+    );
+}
+
+#[tokio::test]
+async fn sidebar_renders_context_lsp_and_modified_files_snapshot() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.token_info = Some(TokenUsageInfo {
+        total_token_usage: TokenUsage {
+            input_tokens: 52_000,
+            cached_input_tokens: 5_000,
+            output_tokens: 4_200,
+            reasoning_output_tokens: 1_200,
+            total_tokens: 49_798,
+        },
+        last_token_usage: TokenUsage::default(),
+        model_context_window: Some(200_000),
+    });
+    chat.sidebar_modified_files = vec![
+        SidebarModifiedFile {
+            path: "packages/pipelines/src/nlp/index.ts".to_string(),
+            additions: 32,
+            deletions: 21,
+        },
+        SidebarModifiedFile {
+            path: "packages/pipelines/src/shared/rate_limiter.ts".to_string(),
+            additions: 41,
+            deletions: 0,
+        },
+    ];
+
+    let width = 130;
+    let height = 20;
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
+        .expect("create terminal");
+    terminal
+        .draw(|f| chat.render(f.area(), f.buffer_mut()))
+        .expect("render sidebar snapshot");
+    assert_snapshot!(
+        "sidebar_renders_context_lsp_and_modified_files",
         normalized_backend_snapshot(terminal.backend())
     );
 }

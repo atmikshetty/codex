@@ -1,0 +1,24 @@
+---
+source: tui/src/chatwidget/tests.rs
+expression: normalized_backend_snapshot(terminal.backend())
+---
+"                                                                                            │                                     "
+"                                                                                            │ Session Title (mock)                "
+"› Ask Codex to do anything                                                                  │                                     "
+"                                                                                            │ Context                             "
+"  gpt-5.3-codex default · 100% left · /tmp/project                                          │ 49.8K tokens                        "
+"                                                                                            │ 0% used                             "
+"                                                                                            │ $0.10 spent                         "
+"                                                                                            │                                     "
+"                                                                                            │ LSP                                 "
+"                                                                                            │ LSPs will activate as files are ... "
+"                                                                                            │                                     "
+"                                                                                            │ Modified Files                      "
+"                                                                                            │ packages/pipelines/src/n... +32 -21 "
+"                                                                                            │ packages/pipelines/src/share... +41 "
+"                                                                                            │                                     "
+"                                                                                            │                                     "
+"                                                                                            │                                     "
+"                                                                                            │                                     "
+"                                                                                            │                                     "
+"                                                                                            │                                     "

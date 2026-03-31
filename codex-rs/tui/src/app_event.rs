@@ -75,6 +75,13 @@ pub(crate) struct ConnectorsSnapshot {
     pub(crate) connectors: Vec<AppInfo>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SidebarModifiedFile {
+    pub(crate) path: String,
+    pub(crate) additions: usize,
+    pub(crate) deletions: usize,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
@@ -526,6 +533,13 @@ pub(crate) enum AppEvent {
         cwd: PathBuf,
         branch: Option<String>,
     },
+
+    /// Async update of git-modified file stats for the right sidebar.
+    SidebarModifiedFilesUpdated {
+        cwd: PathBuf,
+        files: Vec<SidebarModifiedFile>,
+    },
+
     /// Apply a user-confirmed status-line item ordering/selection.
     StatusLineSetup {
         items: Vec<StatusLineItem>,
