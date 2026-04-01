@@ -53,6 +53,8 @@ use codex_features::Stage;
 use codex_features::is_known_feature_key;
 use codex_terminal_detection::TerminalName;
 
+const CODEX_CLI_VERSION_OVERRIDE_ENV_VAR: &str = "CODEX_CLI_VERSION_OVERRIDE";
+
 /// Codex CLI
 ///
 /// If no subcommand is specified, options will be forwarded to the interactive CLI.
@@ -599,7 +601,42 @@ fn main() -> anyhow::Result<()> {
     })
 }
 
+fn resolve_codex_cli_version(
+    version_override: Option<&str>,
+    package_version: Option<&str>,
+) -> String {
+    version_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            package_version
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or(env!("CARGO_PKG_VERSION"))
+        .to_string()
+}
+
 async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
+    let version_override = std::env::var(CODEX_CLI_VERSION_OVERRIDE_ENV_VAR).ok();
+    let package_version = (env!("CARGO_PKG_VERSION") == "0.0.0")
+        .then(|| {
+            std::fs::read_to_string(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../codex-cli/package.json"),
+            )
+            .ok()
+            .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok())
+            .and_then(|json| {
+                json.get("version")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            })
+        })
+        .flatten();
+    let cli_version =
+        resolve_codex_cli_version(version_override.as_deref(), package_version.as_deref());
+    codex_tui::set_codex_cli_version_override(cli_version);
+
     let MultitoolCli {
         config_overrides: mut root_config_overrides,
         feature_toggles,
@@ -1449,6 +1486,26 @@ mod tests {
         assert!(args.last);
         assert_eq!(args.session_id, None);
         assert_eq!(args.prompt.as_deref(), Some("2+2"));
+    }
+
+    #[test]
+    fn resolve_codex_cli_version_prefers_non_empty_override() {
+        assert_eq!(
+            resolve_codex_cli_version(Some("0.118.0"), Some("0.0.0-dev")),
+            "0.118.0".to_string()
+        );
+        assert_eq!(
+            resolve_codex_cli_version(Some("  "), Some("0.0.0-dev")),
+            "0.0.0-dev".to_string()
+        );
+        assert_eq!(
+            resolve_codex_cli_version(None, Some("0.0.0-dev")),
+            "0.0.0-dev".to_string()
+        );
+        assert_eq!(
+            resolve_codex_cli_version(None, None),
+            env!("CARGO_PKG_VERSION").to_string()
+        );
     }
 
     #[test]

@@ -120,7 +120,7 @@ fn pick_tooltip<R: Rng + ?Sized>(rng: &mut R) -> Option<&'static str> {
 
 pub(crate) mod announcement {
     use crate::tooltips::ANNOUNCEMENT_TIP_URL;
-    use crate::version::CODEX_CLI_VERSION;
+    use crate::version::codex_cli_version;
     use chrono::NaiveDate;
     use chrono::Utc;
     use regex_lite::Regex;
@@ -201,7 +201,7 @@ pub(crate) mod announcement {
             let Some(tip) = AnnouncementTip::from_raw(raw) else {
                 continue;
             };
-            if tip.version_matches(CODEX_CLI_VERSION)
+            if tip.version_matches(codex_cli_version())
                 && tip.date_matches(today)
                 && tip.target_app == "cli"
             {
@@ -393,7 +393,7 @@ from_date = "2000-01-01"
 # Example announcement tips for Codex TUI.
 # Each [[announcements]] entry is evaluated in order; the last matching one is shown.
 # Dates are UTC, formatted as YYYY-MM-DD. The from_date is inclusive and the to_date is exclusive.
-# version_regex matches against the CLI version (env!("CARGO_PKG_VERSION")); omit to apply to all versions.
+# version_regex matches against the active CLI version shown in the UI; omit to apply to all versions.
 # target_app specify which app should display the announcement (cli, vsce, ...).
 
 [[announcements]]

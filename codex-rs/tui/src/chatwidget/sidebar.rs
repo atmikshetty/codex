@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use ratatui::layout::Alignment;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
@@ -12,7 +11,7 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 use super::*;
-use crate::version::CODEX_CLI_VERSION;
+use crate::version::codex_cli_version;
 
 const SIDEBAR_WIDTH: u16 = 38;
 const SIDEBAR_GAP: u16 = 1;
@@ -290,9 +289,8 @@ impl ChatWidget {
                 ">_ ".dim(),
                 "OpenAI Codex".bold(),
                 " ".dim(),
-                format!("(v{CODEX_CLI_VERSION})").dim(),
-            ])
-            .alignment(Alignment::Right),
+                format!("(v{})", codex_cli_version()).dim(),
+            ]),
         ]
     }
 

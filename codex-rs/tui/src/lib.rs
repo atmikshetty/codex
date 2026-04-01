@@ -70,6 +70,7 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 use url::Url;
 use uuid::Uuid;
+pub use version::set_codex_cli_version_override;
 
 mod additional_dirs;
 mod app;
@@ -222,6 +223,7 @@ use codex_arg0::Arg0DispatchPaths;
 pub use markdown_render::render_markdown_text;
 pub use public_widgets::composer_input::ComposerAction;
 pub use public_widgets::composer_input::ComposerInput;
+use version::codex_cli_version;
 // (tests access modules directly within the crate)
 
 async fn start_embedded_app_server(
@@ -335,7 +337,7 @@ async fn connect_remote_app_server(
         websocket_url,
         auth_token,
         client_name: "codex-tui".to_string(),
-        client_version: env!("CARGO_PKG_VERSION").to_string(),
+        client_version: codex_cli_version().to_string(),
         experimental_api: true,
         opt_out_notification_methods: Vec::new(),
         channel_capacity: DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
@@ -430,7 +432,7 @@ where
         session_source: codex_protocol::protocol::SessionSource::Cli,
         enable_codex_api_key_env: false,
         client_name: "codex-tui".to_string(),
-        client_version: env!("CARGO_PKG_VERSION").to_string(),
+        client_version: codex_cli_version().to_string(),
         experimental_api: true,
         opt_out_notification_methods: Vec::new(),
         channel_capacity: DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
@@ -861,7 +863,7 @@ pub async fn run_main(
     let otel = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         codex_core::otel_init::build_provider(
             &config,
-            env!("CARGO_PKG_VERSION"),
+            codex_cli_version(),
             /*service_name_override*/ None,
             /*default_analytics_enabled*/ true,
         )
