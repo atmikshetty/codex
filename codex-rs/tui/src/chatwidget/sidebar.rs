@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use ratatui::layout::Alignment;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
@@ -11,6 +12,7 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 use super::*;
+use crate::version::CODEX_CLI_VERSION;
 
 const SIDEBAR_WIDTH: u16 = 38;
 const SIDEBAR_GAP: u16 = 1;
@@ -201,6 +203,16 @@ impl ChatWidget {
     }
 
     fn sidebar_lines(&self, width: usize, max_height: usize) -> Vec<Line<'static>> {
+        let footer_lines = self.sidebar_footer_lines();
+        let footer_len = footer_lines.len();
+        if max_height <= footer_len {
+            return footer_lines
+                .into_iter()
+                .skip(footer_len.saturating_sub(max_height))
+                .collect();
+        }
+
+        let content_height = max_height.saturating_sub(footer_len);
         let usage = self.status_line_total_usage();
         let context_tokens = usage.tokens_in_context_window().max(0);
         let remaining_percent = self.status_line_context_remaining_percent().unwrap_or(0);
@@ -231,41 +243,57 @@ impl ChatWidget {
             Line::from(vec!["Modified Files".bold()]),
         ];
 
-        if max_height <= lines.len() {
+        if content_height <= lines.len() {
+            lines.truncate(content_height);
+            lines.extend(footer_lines);
             return lines;
         }
 
         if self.sidebar_modified_files.is_empty() {
             lines.push(Line::from(vec![Span::from("No modified files yet").dim()]));
-            return lines;
+        } else {
+            let remaining_rows = content_height.saturating_sub(lines.len());
+            if remaining_rows > 0 {
+                let max_file_rows = remaining_rows.min(SIDEBAR_MAX_FILE_ROWS);
+                let mut visible_rows = max_file_rows.min(self.sidebar_modified_files.len());
+                if self.sidebar_modified_files.len() > visible_rows && visible_rows > 0 {
+                    visible_rows = visible_rows.saturating_sub(1);
+                }
+
+                for file in self.sidebar_modified_files.iter().take(visible_rows) {
+                    lines.push(self.sidebar_modified_file_line(file, width));
+                }
+
+                let hidden_count = self
+                    .sidebar_modified_files
+                    .len()
+                    .saturating_sub(visible_rows);
+                if hidden_count > 0 {
+                    lines.push(Line::from(vec![
+                        Span::from(format!("+{hidden_count} more files")).dim(),
+                    ]));
+                }
+            }
         }
 
-        let remaining_rows = max_height.saturating_sub(lines.len());
-        if remaining_rows == 0 {
-            return lines;
+        while lines.len() < content_height {
+            lines.push(Line::from(""));
         }
-
-        let max_file_rows = remaining_rows.min(SIDEBAR_MAX_FILE_ROWS);
-        let mut visible_rows = max_file_rows.min(self.sidebar_modified_files.len());
-        if self.sidebar_modified_files.len() > visible_rows && visible_rows > 0 {
-            visible_rows = visible_rows.saturating_sub(1);
-        }
-
-        for file in self.sidebar_modified_files.iter().take(visible_rows) {
-            lines.push(self.sidebar_modified_file_line(file, width));
-        }
-
-        let hidden_count = self
-            .sidebar_modified_files
-            .len()
-            .saturating_sub(visible_rows);
-        if hidden_count > 0 {
-            lines.push(Line::from(vec![
-                Span::from(format!("+{hidden_count} more files")).dim(),
-            ]));
-        }
-
+        lines.extend(footer_lines);
         lines
+    }
+
+    fn sidebar_footer_lines(&self) -> Vec<Line<'static>> {
+        vec![
+            Line::from(""),
+            Line::from(vec![
+                ">_ ".dim(),
+                "OpenAI Codex".bold(),
+                " ".dim(),
+                format!("(v{CODEX_CLI_VERSION})").dim(),
+            ])
+            .alignment(Alignment::Right),
+        ]
     }
 
     fn sidebar_modified_file_line(
