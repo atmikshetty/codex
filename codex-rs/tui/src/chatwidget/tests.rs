@@ -2064,6 +2064,7 @@ async fn make_chatwidget_manual(
     let app_event_tx = AppEventSender::new(tx_raw);
     let (op_tx, op_rx) = unbounded_channel::<Op>();
     let mut cfg = test_config().await;
+    let sidebar_enabled = cfg.tui_sidebar;
     let resolved_model = model_override
         .map(str::to_owned)
         .unwrap_or_else(|| codex_core::test_support::get_model_offline(cfg.model.as_deref()));
@@ -2198,7 +2199,7 @@ async fn make_chatwidget_manual(
         status_line_branch_cwd: None,
         status_line_branch_pending: false,
         status_line_branch_lookup_complete: false,
-        sidebar_enabled: false,
+        sidebar_enabled,
         sidebar_modified_files: Vec::new(),
         sidebar_modified_files_cwd: None,
         sidebar_modified_files_pending: false,
@@ -7037,6 +7038,41 @@ async fn collaboration_modes_defaults_to_code_on_startup() {
 }
 
 #[tokio::test]
+async fn sidebar_state_defaults_from_config() {
+    let codex_home = tempdir().expect("tempdir");
+    let cfg = ConfigBuilder::default()
+        .codex_home(codex_home.path().to_path_buf())
+        .cli_overrides(vec![("tui.sidebar".to_string(), TomlValue::Boolean(true))])
+        .build()
+        .await
+        .expect("config");
+    let resolved_model = codex_core::test_support::get_model_offline(cfg.model.as_deref());
+    let session_telemetry = test_session_telemetry(&cfg, resolved_model.as_str());
+    let init = ChatWidgetInit {
+        config: cfg.clone(),
+        frame_requester: FrameRequester::test_dummy(),
+        app_event_tx: AppEventSender::new(unbounded_channel::<AppEvent>().0),
+        initial_user_message: None,
+        enhanced_keys_supported: false,
+        has_chatgpt_account: false,
+        model_catalog: test_model_catalog(&cfg),
+        feedback: codex_feedback::CodexFeedback::new(),
+        is_first_run: true,
+        feedback_audience: FeedbackAudience::External,
+        status_account_display: None,
+        initial_plan_type: None,
+        model: Some(resolved_model),
+        startup_tooltip_override: None,
+        status_line_invalid_items_warned: Arc::new(AtomicBool::new(false)),
+        terminal_title_invalid_items_warned: Arc::new(AtomicBool::new(false)),
+        session_telemetry,
+    };
+
+    let chat = ChatWidget::new_with_app_event(init);
+    assert!(chat.sidebar_enabled());
+}
+
+#[tokio::test]
 async fn experimental_mode_plan_is_ignored_on_startup() {
     let codex_home = tempdir().expect("tempdir");
     let cfg = ConfigBuilder::default()
@@ -7524,6 +7560,26 @@ async fn slash_sidebar_status_reports_current_state() {
     let cells = drain_insert_history(&mut rx);
     let rendered = lines_to_single_string(cells.last().expect("sidebar status message"));
     assert!(rendered.contains("Sidebar is off."));
+}
+
+#[tokio::test]
+async fn slash_sidebar_emits_persistence_events() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command(SlashCommand::Sidebar);
+
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::PersistSidebarVisibility { enabled: true })
+    );
+    let _ = drain_insert_history(&mut rx);
+
+    chat.dispatch_command_with_args(SlashCommand::Sidebar, "off".to_string(), Vec::new());
+
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::PersistSidebarVisibility { enabled: false })
+    );
 }
 
 #[tokio::test]

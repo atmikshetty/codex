@@ -102,6 +102,14 @@ pub fn terminal_title_items_edit(items: &[String]) -> ConfigEdit {
     }
 }
 
+/// Produces a config edit that sets `[tui].sidebar`.
+pub fn sidebar_edit(enabled: bool) -> ConfigEdit {
+    ConfigEdit::SetPath {
+        segments: vec!["tui".to_string(), "sidebar".to_string()],
+        value: value(enabled),
+    }
+}
+
 pub fn model_availability_nux_count_edits(shown_count: &HashMap<String, u32>) -> Vec<ConfigEdit> {
     let mut shown_count_entries: Vec<_> = shown_count.iter().collect();
     shown_count_entries.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));

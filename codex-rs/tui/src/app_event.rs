@@ -307,6 +307,11 @@ pub(crate) enum AppEvent {
         service_tier: Option<ServiceTier>,
     },
 
+    /// Persist whether the right sidebar should start open.
+    PersistSidebarVisibility {
+        enabled: bool,
+    },
+
     /// Open the device picker for a realtime microphone or speaker.
     OpenRealtimeAudioDeviceSelection {
         kind: RealtimeAudioDeviceKind,

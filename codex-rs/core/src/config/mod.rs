@@ -349,6 +349,9 @@ pub struct Config {
     /// When unset, the TUI defaults to: `project` and `spinner`.
     pub tui_terminal_title: Option<Vec<String>>,
 
+    /// Whether the right sidebar starts open in the TUI.
+    pub tui_sidebar: bool,
+
     /// Syntax highlighting theme override (kebab-case name).
     pub tui_theme: Option<String>,
 
@@ -2703,6 +2706,7 @@ impl Config {
                 .unwrap_or_default(),
             tui_status_line: cfg.tui.as_ref().and_then(|t| t.status_line.clone()),
             tui_terminal_title: cfg.tui.as_ref().and_then(|t| t.terminal_title.clone()),
+            tui_sidebar: cfg.tui.as_ref().map(|t| t.sidebar).unwrap_or(false),
             tui_theme: cfg.tui.as_ref().and_then(|t| t.theme.clone()),
             otel: {
                 let t: OtelConfigToml = cfg.otel.unwrap_or_default();

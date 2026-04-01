@@ -4776,6 +4776,20 @@ impl App {
                     }
                 }
             }
+            AppEvent::PersistSidebarVisibility { enabled } => {
+                let edit = codex_core::config::edit::sidebar_edit(enabled);
+                if let Err(err) = ConfigEditsBuilder::new(&self.config.codex_home)
+                    .with_edits([edit])
+                    .apply()
+                    .await
+                {
+                    tracing::error!(error = %err, "failed to persist sidebar visibility");
+                    self.chat_widget
+                        .add_error_message(format!("Failed to save sidebar preference: {err}"));
+                } else {
+                    self.config.tui_sidebar = enabled;
+                }
+            }
             AppEvent::PersistRealtimeAudioDeviceSelection { kind, name } => {
                 let builder = match kind {
                     RealtimeAudioDeviceKind::Microphone => {

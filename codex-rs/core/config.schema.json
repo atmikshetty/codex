@@ -1702,6 +1702,11 @@
           "description": "Show startup tooltips in the TUI welcome screen. Defaults to `true`.",
           "type": "boolean"
         },
+        "sidebar": {
+          "default": false,
+          "description": "Whether the right sidebar is open by default when the TUI starts. Defaults to `false`.",
+          "type": "boolean"
+        },
         "status_line": {
           "default": null,
           "description": "Ordered list of status line item identifiers.\n\nWhen set, the TUI renders the selected items as the status line. When unset, the TUI defaults to: `model-with-reasoning`, `context-remaining`, and `current-dir`.",

@@ -779,6 +779,11 @@ pub struct Tui {
     #[serde(default)]
     pub terminal_title: Option<Vec<String>>,
 
+    /// Whether the right sidebar is open by default when the TUI starts.
+    /// Defaults to `false`.
+    #[serde(default)]
+    pub sidebar: bool,
+
     /// Syntax highlighting theme name (kebab-case).
     ///
     /// When set, overrides automatic light/dark theme detection.

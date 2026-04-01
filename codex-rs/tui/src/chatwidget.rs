@@ -4704,6 +4704,7 @@ impl ChatWidget {
         let active_cell = Some(Self::placeholder_session_header_cell(&config));
 
         let current_cwd = Some(config.cwd.to_path_buf());
+        let sidebar_enabled = config.tui_sidebar;
         let queued_message_edit_binding = queued_message_edit_binding_for_terminal(terminal_info());
         let mut widget = Self {
             app_event_tx: app_event_tx.clone(),
@@ -4817,7 +4818,7 @@ impl ChatWidget {
             status_line_branch_cwd: None,
             status_line_branch_pending: false,
             status_line_branch_lookup_complete: false,
-            sidebar_enabled: false,
+            sidebar_enabled,
             sidebar_modified_files: Vec::new(),
             sidebar_modified_files_cwd: None,
             sidebar_modified_files_pending: false,
@@ -5376,7 +5377,7 @@ impl ChatWidget {
             }
             SlashCommand::Sidebar => {
                 let enabled = !self.sidebar_enabled();
-                self.set_sidebar_enabled(enabled);
+                self.set_sidebar_enabled_with_persistence(enabled);
                 let (message, hint) = self.sidebar_toggle_message(enabled);
                 self.add_info_message(message, hint);
             }
@@ -5505,12 +5506,12 @@ impl ChatWidget {
                 }
                 match trimmed.to_ascii_lowercase().as_str() {
                     "on" => {
-                        self.set_sidebar_enabled(/*enabled*/ true);
+                        self.set_sidebar_enabled_with_persistence(/*enabled*/ true);
                         let (message, hint) = self.sidebar_toggle_message(/*enabled*/ true);
                         self.add_info_message(message, hint);
                     }
                     "off" => {
-                        self.set_sidebar_enabled(/*enabled*/ false);
+                        self.set_sidebar_enabled_with_persistence(/*enabled*/ false);
                         self.add_info_message("Sidebar hidden.".to_string(), /*hint*/ None);
                     }
                     "status" => {

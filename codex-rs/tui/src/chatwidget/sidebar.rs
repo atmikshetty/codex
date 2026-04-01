@@ -41,6 +41,18 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    pub(crate) fn set_sidebar_enabled_with_persistence(&mut self, enabled: bool) {
+        let changed = self.sidebar_enabled != enabled;
+        self.set_sidebar_enabled(enabled);
+        if !changed {
+            return;
+        }
+
+        self.config.tui_sidebar = enabled;
+        self.app_event_tx
+            .send(AppEvent::PersistSidebarVisibility { enabled });
+    }
+
     pub(crate) fn sidebar_status_message(&self) -> (String, Option<String>) {
         if !self.sidebar_enabled {
             return ("Sidebar is off.".to_string(), None);
